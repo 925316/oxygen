@@ -1,0 +1,178 @@
+name: scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: First seed (inclusive)
+        required: true
+        default: "0"
+      count:
+        description: How many seeds to scan
+        required: true
+        default: "100000"
+      shards:
+        description: Parallel shards (one runner job each)
+        required: true
+        default: "8"
+      threads:
+        description: Threads per shard
+        required: true
+        default: "4"
+      big_volcano:
+        description: Minimum big volcanoes
+        required: false
+        default: "1"
+      iron:
+        description: Minimum iron volcanoes
+        required: false
+        default: "1"
+      copper:
+        description: Minimum copper volcanoes
+        required: false
+        default: "0"
+      gold:
+        description: Minimum gold volcanoes
+        required: false
+        default: "1"
+      min_water:
+        description: Minimum total water, kg/s
+        required: false
+        default: "12"
+      cold_water:
+        description: Minimum cold water (cool slush + cool salt slush), kg/s
+        required: false
+        default: "0"
+      max_junk:
+        description: Maximum junk vents anywhere on the map
+        required: false
+        default: "99"
+      max_near_junk:
+        description: Maximum junk vents within 60 cells of the base
+        required: false
+        default: "99"
+      require_clear:
+        description: Require the 50x38 base layout to be free of geysers
+        type: boolean
+        default: true
+
+concurrency:
+  group: scan-${{ github.ref }}-${{ inputs.from }}-${{ inputs.count }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI: "1"
+  NODE_OPTIONS: "--max-old-space-size=3072"
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Build shard matrix
+        id: plan
+        run: |
+          shards=${{ inputs.shards }}
+          if [ "$shards" -lt 1 ] || [ "$shards" -gt 20 ]; then
+            echo "::error::shards must be between 1 and 20, got $shards"
+            exit 1
+          fi
+          echo "matrix={\"shard\":[$(seq -s, 0 $((shards - 1)))]}" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: shard ${{ matrix.shard }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Restore shard result
+        id: shard-cache
+        uses: actions/cache@v4
+        with:
+          path: out/shard-${{ matrix.shard }}.json
+          key: scan-${{ hashFiles('app/**', 'scripts/ci-scan.cjs', 'config/default-filter.json') }}-f${{ inputs.from }}-n${{ inputs.count }}-s${{ inputs.shards }}-i${{ matrix.shard }}
+
+      - name: Scan shard
+        if: steps.shard-cache.outputs.cache-hit != 'true'
+        env:
+          CI_FROM: ${{ inputs.from }}
+          CI_COUNT: ${{ inputs.count }}
+          CI_SHARDS: ${{ inputs.shards }}
+          CI_INDEX: ${{ matrix.shard }}
+          CI_THREADS: ${{ inputs.threads }}
+          CI_OUTPUT: out/shard-${{ matrix.shard }}.json
+          CI_FILTER_FILE: config/default-filter.json
+          CI_BIG_VOLCANO: ${{ inputs.big_volcano }}
+          CI_IRON: ${{ inputs.iron }}
+          CI_COPPER: ${{ inputs.copper }}
+          CI_GOLD: ${{ inputs.gold }}
+          CI_MIN_WATER: ${{ inputs.min_water }}
+          CI_COLD_WATER: ${{ inputs.cold_water }}
+          CI_MAX_JUNK: ${{ inputs.max_junk }}
+          CI_MAX_NEAR_JUNK: ${{ inputs.max_near_junk }}
+          CI_REQUIRE_CLEAR: ${{ inputs.require_clear }}
+        run: node scripts/ci-scan.cjs shard
+
+      - name: Upload shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  merge:
+    name: merge
+    needs: [plan, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download shards
+        uses: actions/download-artifact@v4
+        with:
+          path: shards
+          pattern: shard-*
+          merge-multiple: true
+
+      - name: Merge and rank
+        run: node scripts/ci-scan.cjs merge --inputs shards --output out/hits.json
+
+      - name: Build report
+        run: node scripts/ci-report.cjs --input out/hits.json --output out/summary.md
+
+      - name: Publish run summary
+        if: always()
+        run: cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-${{ inputs.from }}-${{ inputs.count }}
+          path: |
+            out/hits.json
+            out/summary.md
+          retention-days: 30

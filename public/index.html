@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="meta.title">ONI 种子扫描器</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1 data-i18n="header.title">ONI 种子扫描器</h1>
+  <span class="sub" data-i18n="header.sub">本体 Terra · 全本地离线</span>
+  <div class="lang-switch" role="group" data-i18n-aria="lang.aria">
+    <button type="button" data-lang="zh" class="active">中文</button>
+    <button type="button" data-lang="en">EN</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel" id="scan-panel">
+    <h2 data-i18n="scan.title">扫描设置</h2>
+
+    <div class="row">
+      <label><span data-i18n="scan.from">起始种子</span>
+        <input id="from" type="number" value="0" min="0">
+      </label>
+      <label><span data-i18n="scan.count">扫描数量</span>
+        <input id="count" type="number" value="2000" min="1">
+      </label>
+      <span class="hint" id="eta"></span>
+    </div>
+
+    <div class="row filters">
+      <label><span data-i18n="filter.bigVolcano">大火山 ≥</span>
+        <input id="f-bigVolcano" type="number" value="1" min="0" max="10">
+      </label>
+      <label><span data-i18n="filter.iron">铁火山 ≥</span>
+        <input id="f-iron" type="number" value="1" min="0" max="10">
+      </label>
+      <label><span data-i18n="filter.copper">铜火山 ≥</span>
+        <input id="f-copper" type="number" value="0" min="0" max="10">
+      </label>
+      <label><span data-i18n="filter.gold">金火山 ≥</span>
+        <input id="f-gold" type="number" value="1" min="0" max="10">
+      </label>
+      <label><span data-i18n="filter.totalMetal">金属总产 ≥ kg/s</span>
+        <input id="f-totalMetal" type="number" value="0" min="0" step="0.1">
+      </label>
+      <label><span data-i18n="filter.saltWater">盐水 ≥ kg/s</span>
+        <input id="f-saltWater" type="number" value="0" min="0" step="0.1">
+      </label>
+      <label><span data-i18n="filter.cleanWater">清水 ≥ kg/s</span>
+        <input id="f-cleanWater" type="number" value="0" min="0" step="0.1">
+      </label>
+      <label><span data-i18n="filter.coldWater">低温水 ≥ kg/s</span>
+        <input id="f-coldWater" type="number" value="0" min="0" step="0.1">
+      </label>
+      <label><span data-i18n="filter.minWater">水总量 ≥ kg/s</span>
+        <input id="f-minWater" type="number" value="12" min="0" step="0.1">
+      </label>
+      <label><span data-i18n="filter.maxJunk">废弃喷孔 ≤</span>
+        <input id="f-maxJunk" type="number" value="99" min="0" max="99">
+      </label>
+      <label><span data-i18n="filter.maxNearJunk">基地旁废喷孔 ≤</span>
+        <input id="f-maxNearJunk" type="number" value="99" min="0" max="99">
+      </label>
+      <label class="check">
+        <input id="f-requireClear" type="checkbox" checked>
+        <span data-i18n="filter.requireClear">基地 50×38 内不能有泉</span>
+      </label>
+    </div>
+
+    <div class="row actions">
+      <button id="btn-start" class="primary" data-i18n="btn.start">开始扫描</button>
+      <button id="btn-stop" disabled data-i18n="btn.stop">停止</button>
+      <button id="btn-export" disabled data-i18n="btn.export">导出 CSV</button>
+      <button id="btn-clear" data-i18n="btn.clear">清空结果</button>
+      <button id="btn-preset" class="ghost" data-i18n="btn.preset" data-i18n-title="btn.preset.title">套用默认条件</button>
+      <span class="hint" id="thread-info"></span>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress"><div id="progress-bar"></div></div>
+      <div class="progress-text" id="progress-text" data-i18n="progress.idle">空闲</div>
+    </div>
+  </section>
+
+  <section class="panel" id="result-panel">
+    <h2><span data-i18n="result.title">结果</span> <span class="count" id="hit-count">0</span></h2>
+    <div class="table-wrap">
+      <table id="results">
+        <thead>
+          <tr>
+            <th data-key="rank" data-i18n="col.rank">#</th>
+            <th data-key="seed" data-i18n="col.seed">种子</th>
+            <th data-key="score" data-i18n="col.score">分数</th>
+            <th data-key="bigVolcano" data-i18n="col.bigVolcano">大火山</th>
+            <th data-key="volcanoRate" data-i18n="col.volcanoRate">火山 kg/s</th>
+            <th data-key="clean" data-i18n="col.clean">清水 kg/s</th>
+            <th data-key="salt" data-i18n="col.salt">盐水 kg/s</th>
+            <th data-key="water" data-i18n="col.water">水总量</th>
+            <th data-key="metal" data-i18n="col.metal">金属 kg/s</th>
+            <th data-key="methane" data-i18n="col.methane">天然气</th>
+            <th data-key="junkCount" data-i18n="col.junkCount">废喷孔</th>
+            <th data-key="nearest" data-i18n="col.nearest">最近泉</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="empty" id="empty-hint" data-i18n="result.empty">还没有结果。设置条件后点「开始扫描」。</p>
+  </section>
+
+  <section class="panel hidden" id="detail-panel">
+    <h2><span data-i18n="detail.seed">种子</span> <span id="detail-seed"></span>
+      <button id="btn-close-detail" class="ghost" data-i18n="btn.close">关闭</button>
+    </h2>
+    <div class="detail-body">
+      <div class="map-wrap">
+        <h3 data-i18n="detail.mapTitle">基地平面图 (50 × 38)</h3>
+        <svg id="base-map" viewBox="-0.5 -0.5 50 38" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="legend">
+          <span class="lg lg-block"></span><span data-i18n="legend.block">规划区（不可有泉）</span>
+          <span class="lg lg-pod"></span><span data-i18n="legend.pod">打印仓</span>
+          <span class="lg lg-geyser"></span><span data-i18n="legend.geyser">泉（框内）</span>
+          <span class="lg lg-outside"></span><span data-i18n="legend.outside">泉（基地区外）</span>
+        </p>
+      </div>
+      <div class="detail-tables">
+        <h3 data-i18n="detail.geysers">泉水明细</h3>
+        <table id="geyser-table">
+          <thead>
+            <tr>
+              <th data-i18n="gcol.type">类型</th>
+              <th data-i18n="gcol.rate">kg/s</th>
+              <th data-i18n="gcol.local">基地内坐标</th>
+              <th data-i18n="gcol.zone">所在区域</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <h3 data-i18n="detail.resources">资源储量</h3>
+        <div id="resources" class="resources"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="locales.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

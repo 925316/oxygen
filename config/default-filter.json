@@ -1,0 +1,33 @@
+{
+  "filter": {
+    "bigVolcano": 1,
+    "iron": 1,
+    "copper": 0,
+    "gold": 1,
+    "totalMetal": 0,
+    "saltWater": 0,
+    "cleanWater": 0,
+    "coldWater": 0,
+    "minWater": 12,
+    "maxJunk": 99,
+    "maxNearJunk": 99,
+    "requireClear": true
+  },
+  "weights": {
+    "water": 30,
+    "cold": 20,
+    "volcano": 10,
+    "metal": 15,
+    "gas": 12,
+    "junkPenalty": 1,
+    "nearJunkPenalty": 3,
+    "crowdingPenalty": 1.5
+  },
+  "targets": {
+    "water": 14,
+    "cold": 2,
+    "volcano": 4,
+    "metal": 1.5,
+    "gas": 0.3
+  }
+}

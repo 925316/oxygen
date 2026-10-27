@@ -8,6 +8,9 @@ hits.json
 summary.json
 summary.md
 oni-seeds-*.csv
+out/
+shards/
+shard-*.json
 
 # Local scratch
 *.log

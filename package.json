@@ -1,0 +1,20 @@
+{
+  "name": "oni-seedcraft",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Local Oxygen Not Included Terra seed scanner with custom base-layout clearance filtering",
+  "scripts": {
+    "start": "node server.cjs",
+    "inspect": "node scripts/inspect-seed.cjs",
+    "test": "node --test test/*.test.mjs",
+    "ci:shard": "node scripts/ci-scan.cjs shard",
+    "ci:merge": "node scripts/ci-scan.cjs merge",
+    "ci:report": "node scripts/ci-report.cjs",
+    "verify": "node verify/verify.cjs && node verify/verify-feasibility.cjs && node verify/verify-http.cjs && node verify/verify-server.cjs && node verify/verify-memory.cjs",
+    "audit": "node tools/audit-comments.cjs && node tools/audit-characters.cjs && node tools/audit-i18n.cjs && node tools/audit-docs.cjs && node tools/check-requires.cjs",
+    "bench": "node bench/bench-bigvolcano.cjs 1000"
+  },
+  "dependencies": {
+    "@onimaxxing/worldgen-node": "^0.33.3"
+  }
+}

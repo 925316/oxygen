@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax check
+        shell: bash
+        run: |
+          fail=0
+          while IFS= read -r file; do
+            node --check "$file" || fail=1
+          done < <(find . -path ./node_modules -prune -o \( -name '*.cjs' -o -name '*.js' -o -name '*.mjs' \) -print)
+          exit $fail
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Workflow YAML is valid
+        shell: python
+        run: |
+          import glob
+          import yaml
+          for path in sorted(glob.glob(".github/workflows/*.yml")):
+              yaml.safe_load(open(path, encoding="utf-8"))
+              print("ok", path)
