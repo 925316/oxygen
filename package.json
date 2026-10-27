@@ -10,6 +10,8 @@
     "ci:shard": "node scripts/ci-scan.cjs shard",
     "ci:merge": "node scripts/ci-scan.cjs merge",
     "ci:report": "node scripts/ci-report.cjs",
+    "ci:plan": "node scripts/ci-plan.cjs",
+    "ci:sweep": "node scripts/ci-sweep.cjs",
     "verify": "node verify/verify.cjs && node verify/verify-feasibility.cjs && node verify/verify-http.cjs && node verify/verify-server.cjs && node verify/verify-memory.cjs",
     "audit": "node tools/audit-comments.cjs && node tools/audit-characters.cjs && node tools/audit-i18n.cjs && node tools/audit-docs.cjs && node tools/check-requires.cjs",
     "bench": "node bench/bench-bigvolcano.cjs 1000"
