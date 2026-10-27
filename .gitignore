@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Scan output. The tool writes results next to itself by default; keep them out
+# of history, they are reproducible from the seed range.
+results-*.json
+hits.json
+summary.json
+summary.md
+oni-seeds-*.csv
+
+# Local scratch
+*.log
+*.tmp
+.tmp/
+scratch/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artefacts
+dist/
+build/
+
+# Local environment
+.env
+.env.*
