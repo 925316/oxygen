@@ -23,6 +23,24 @@ function readNumber(name, env, fallback) {
   return value;
 }
 
+// How many top-scoring seeds a shard keeps. A strict filter still passes
+// millions of seeds over the whole space, so a shard writes a rolling leader
+// board instead of every hit: memory and output size stay flat no matter how
+// far it scans.
+function readTopN() {
+  const value = Math.floor(readNumber("top-n", "CI_TOP_N", 5000));
+  if (value < 0) throw new Error(`--top-n must be >= 0, got ${value}`);
+  return value;
+}
+
+// Keep the best `n` hits, ordered by score then seed. Sorting is only paid when
+// the board is full, which is rare once scanning is past the warm-up.
+function trimTop(hits, n) {
+  if (n <= 0 || hits.length <= n) return hits;
+  const sorted = [...hits].sort((a, b) => b.score - a.score || a.seed - b.seed);
+  return sorted.slice(0, n);
+}
+
 // Terminal output follows --lang / ONI_LANG, like inspect-seed.cjs does.
 // readLang() runs before makeT() is called, so it may only touch argv and env.
 function readLang() {
@@ -170,6 +188,7 @@ function runShard() {
 
   const started = Date.now();
   const deadline = readDeadline();
+  const topN = readTopN();
   const scan = new Scan({
     from: slice.from,
     to: slice.to,
@@ -177,6 +196,7 @@ function runShard() {
     weights,
     targets: {},
     threads,
+    topN,
   });
 
   const tick = setInterval(() => {
@@ -211,7 +231,8 @@ function runShard() {
       scanned: scan.done,
       elapsedSeconds: Math.round((Date.now() - started) / 100) / 10,
       threads,
-      hits: scan.sortedHits(),
+      topN: topN || null,
+      hits: trimTop(scan.sortedHits(), topN),
       rejected: scan.rejectionReport(),
       finished: !timeout,
       stoppedBy: timeout ? "deadline" : null,
@@ -281,6 +302,8 @@ function runMerge() {
   }
 
   const hits = [...bySeed.values()].sort((a, b) => b.score - a.score || a.seed - b.seed);
+  const keep = readTopN();
+  const kept = keep > 0 ? hits.slice(0, keep) : hits;
   const rejected = {};
   for (const p of payloads) {
     for (const r of p.rejected ?? []) rejected[r.reason] = (rejected[r.reason] ?? 0) + r.count;
@@ -299,11 +322,13 @@ function runMerge() {
     weights: payloads[0].weights ?? {},
     elapsedSeconds: Math.round(elapsed * 10) / 10,
     hitCount: hits.length,
+    keptCount: kept.length,
+    topN: keep || null,
     hitRate: scanned ? hits.length / scanned : 0,
     rejected: Object.entries(rejected)
       .sort((a, b) => b[1] - a[1])
       .map(([reason, count]) => ({ reason, count, pct: scanned ? Math.round((count / scanned) * 1000) / 10 : 0 })),
-    hits,
+    hits: kept,
   };
 
   writeJson(output, summary);
@@ -311,6 +336,9 @@ function runMerge() {
   console.log(t("merge.done", {
     shards: payloads.length, seeds: scanned.toLocaleString(), hits: hits.length,
   }));
+  if (keep > 0 && kept.length < hits.length) {
+    console.log(`  kept the top ${kept.length} by score (${hits.length} hits before trimming)`);
+  }
   console.log(t("merge.rate", { rate: (summary.hitRate * 100).toFixed(3), seconds: summary.elapsedSeconds.toFixed(0) }));
   if (partial.length) console.log(t("merge.partial", { n: partial.length, seeds: (to - from - scanned).toLocaleString() }));
   for (const [i, hit] of hits.slice(0, 10).entries()) {

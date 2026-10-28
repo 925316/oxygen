@@ -15,7 +15,7 @@ const WORKER_FILE = path.join(__dirname, "scan-worker.cjs");
 const DEFAULT_BATCH = 4;
 
 class Scan {
-  constructor({ from, to, filter, weights, targets, threads, batch = DEFAULT_BATCH }) {
+  constructor({ from, to, filter, weights, targets, threads, batch = DEFAULT_BATCH, topN = 0 }) {
     this.from = from;
     this.to = to;
     this.cursor = from;
@@ -24,6 +24,11 @@ class Scan {
     this.startedAt = Date.now();
     this.done = 0;
     this.hits = [];
+    this.hitTotal = 0;
+    // A long scan can pass millions of seeds, so the hit list is capped. The
+    // cap is applied when the buffer grows past twice the limit, which keeps
+    // the sort cost amortised instead of paid on every hit.
+    this.topN = Math.max(0, topN);
     this.rejected = {};
     this.workers = [];
     this.finished = false;
@@ -69,10 +74,21 @@ class Scan {
   onMessage(msg) {
     switch (msg.type) {
       case "progress": this.done += msg.count; break;
-      case "hit": this.hits.push(msg.data); break;
+      case "hit": this.addHit(msg.data); break;
       case "reject": this.rejected[msg.reason] = (this.rejected[msg.reason] ?? 0) + 1; break;
       default: break;
     }
+  }
+
+  addHit(hit) {
+    this.hitTotal++;
+    this.hits.push(hit);
+    if (this.topN <= 0) return;
+    // Trim lazily: only once the buffer is twice the cap, so the sort is paid
+    // once per topN hits rather than on every accepted seed.
+    if (this.hits.length <= this.topN * 2) return;
+    this.hits.sort((a, b) => b.score - a.score || a.seed - b.seed);
+    this.hits.length = this.topN;
   }
 
   workerEnded() {
@@ -99,7 +115,8 @@ class Scan {
       running: !this.finished,
       total: this.total,
       done: Math.min(this.done, this.total),
-      hits: this.hits.length,
+      hits: this.hitTotal,
+      kept: this.hits.length,
       speed: elapsed > 0 ? this.done / elapsed : 0,
       elapsed,
       threads: this.threadLimit,

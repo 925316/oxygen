@@ -6,12 +6,13 @@
     "gold": 1,
     "totalMetal": 0,
     "saltWater": 0,
-    "cleanWater": 0,
-    "coldWater": 0,
-    "minWater": 12,
-    "maxJunk": 99,
-    "maxNearJunk": 99,
-    "requireClear": true
+    "cleanWater": 2,
+    "minWater": 16,
+    "coldWater": 2,
+    "maxJunk": 3,
+    "maxNearJunk": 0,
+    "requireClear": true,
+    "requireTower": true
   },
   "weights": {
     "water": 30,

@@ -85,6 +85,8 @@ function summarize(loaded) {
     nearJunk: plan.nearJunk,
     blocked: plan.blocked,
     blockedBy: plan.blockedBy,
+    towerBlocked: plan.towerBlocked,
+    towerHits: plan.towerHits,
   };
 }
 
@@ -145,6 +147,14 @@ function quickRejects(loaded, filter) {
     for (const g of geysers) {
       const { lx, ly } = base.toLocal(g, hq);
       if (base.inBase(lx, ly)) return "blocked";
+    }
+  }
+  // The shaft runs the full height of the world, so it is tested on every
+  // geyser regardless of how far it sits from the base frame.
+  if (filter.requireTower !== false) {
+    for (const g of geysers) {
+      const { lx } = base.toLocal(g, hq);
+      if (base.inTower(lx)) return "tower";
     }
   }
   if (nearJunkCount(geysers, hq, filter.maxNearJunk ?? 99) > (filter.maxNearJunk ?? 99)) return "nearJunk";

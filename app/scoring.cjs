@@ -27,19 +27,23 @@ const DEFAULT_TARGETS = {
   gas: 0.3,
 };
 
+// Fallback used when no filter file is given. It mirrors
+// config/default-filter.json on purpose: a caller that forgets the file must
+// not silently scan with every gate at zero.
 const DEFAULT_FILTER = {
-  bigVolcano: 0,
-  iron: 0,
+  bigVolcano: 1,
+  iron: 1,
   copper: 0,
-  gold: 0,
+  gold: 1,
   totalMetal: 0,
   saltWater: 0,
-  cleanWater: 0,
-  coldWater: 0,
-  minWater: 0,
-  maxJunk: 99,
-  maxNearJunk: 99,
+  cleanWater: 2,
+  coldWater: 2,
+  minWater: 16,
+  maxJunk: 3,
+  maxNearJunk: 0,
   requireClear: true,
+  requireTower: true,
 };
 
 // Water is priced by what it costs to use it, and the community ranks it the
@@ -77,6 +81,7 @@ function normalizeFilter(filter = {}) {
 function passes(s, rawFilter = {}) {
   const f = normalizeFilter(rawFilter);
   if (f.requireClear && s.blocked) return false;
+  if (f.requireTower && s.towerBlocked) return false;
   if (s.bigVolcano < f.bigVolcano) return false;
   if (s.iron < f.iron || s.copper < f.copper || s.gold < f.gold) return false;
   if (s.metal < f.totalMetal) return false;
@@ -94,6 +99,7 @@ function rejectReasons(s, rawFilter = {}) {
   const f = normalizeFilter(rawFilter);
   const out = [];
   if (f.requireClear && s.blocked) out.push("blocked");
+  if (f.requireTower && s.towerBlocked) out.push("tower");
   if (s.bigVolcano < f.bigVolcano) out.push("bigVolcano");
   if (s.iron < f.iron) out.push("iron");
   if (s.copper < f.copper) out.push("copper");

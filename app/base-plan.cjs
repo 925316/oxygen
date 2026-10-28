@@ -13,6 +13,16 @@ const JUNK_SET = types.JUNK_SET;
 const BASE_W = 50;
 const BASE_H = 38;
 
+// The tower is a 3-wide vertical shaft the player wants to run from the top of
+// the map to the bottom. It sits left of centre: 25 columns to its left, the
+// shaft itself, then 22 columns to its right, which is 25 + 3 + 22 = 50. Its
+// local x is fixed; its y is not, because the shaft spans the whole world and
+// not just the 38-row base frame.
+const TOWER_X0 = 25;
+const TOWER_X1 = 27;
+const TOWER_LEFT_W = TOWER_X0;
+const TOWER_RIGHT_W = BASE_W - TOWER_X1 - 1;
+
 // The pod occupies 4x2 cells; the plan reserves a 4x4 block around it, which
 // is why the reserved regions below are larger than the footprint.
 const POD_LOCAL_X = 32;
@@ -24,19 +34,21 @@ const HQ_TO_ANCHOR_DY = 1;
 // frame, so `blockAt` is never null inside it: any geyser landing inside the
 // base is a rejection, not only one on a protected cell.
 const BLOCKS = [
-  { name: "left", x0: 0, x1: 31, y0: 0, y1: 31 },
-  { name: "horizontal", x0: 0, x1: 31, y0: 32, y1: 37 },
+  { name: "left", x0: 0, x1: TOWER_X0 - 1, y0: 0, y1: 37 },
+  { name: "tower", x0: TOWER_X0, x1: TOWER_X1, y0: 0, y1: 37 },
+  { name: "mid", x0: TOWER_X1 + 1, x1: 31, y0: 0, y1: 37 },
   { name: "gap", x0: 32, x1: 39, y0: 0, y1: 31 },
   { name: "pod", x0: 32, x1: 39, y0: 32, y1: 37 },
   { name: "vertical", x0: 40, x1: 49, y0: 0, y1: 37 },
 ];
 
 const BLOCK_LABEL = {
-  horizontal: "水平区域",
   pod: "打印仓旁",
   vertical: "垂直区域",
   gap: "打印仓上方",
   left: "左侧区域",
+  tower: "通天塔通道",
+  mid: "通道右侧区域",
 };
 
 // How close a geyser crowds a build plan, as a 0-100 cost. Only geysers inside
@@ -53,6 +65,12 @@ function crowding(lx, ly) {
 // Chebyshev distance from a local cell to the pod. 0 is the pod's own cell.
 function podDistance(lx, ly) {
   return Math.max(Math.abs(lx - POD_LOCAL_X), Math.abs(ly - POD_LOCAL_Y_BOTTOM));
+}
+
+// The shaft ignores y: it runs the full height of the world, and `ly` from
+// toLocal already spans the whole map, not just the base frame.
+function inTower(lx) {
+  return lx >= TOWER_X0 && lx <= TOWER_X1;
 }
 
 // World cell -> local base cell.
@@ -103,9 +121,13 @@ function judge(geysers, hq, { junkRadius = 60, radius = 40 } = {}) {
   let nearest = Infinity;
   let nearJunk = 0;
   let inside = 0;
+  // The shaft spans the whole map, so it is checked against every geyser and
+  // not just the ones near the base frame.
+  const towerHits = [];
 
   for (const g of geysers) {
     const { lx, ly } = toLocal(g, hq);
+    if (inTower(lx)) towerHits.push({ type: g.type, lx, ly });
     const frame = frameDistance(lx, ly);
     if (JUNK_SET.has(g.type) && frame <= junkRadius) nearJunk++;
     if (inBase(lx, ly)) inside++;
@@ -127,6 +149,8 @@ function judge(geysers, hq, { junkRadius = 60, radius = 40 } = {}) {
     near,
     nearJunk,
     inside,
+    towerHits,
+    towerBlocked: towerHits.length > 0,
   };
 }
 
@@ -136,5 +160,6 @@ function findHQ(buildings) {
 
 module.exports = {
   BASE_W, BASE_H, POD_LOCAL_X, POD_LOCAL_Y_BOTTOM, BLOCKS, BLOCK_LABEL, CROWD_RADIUS,
-  toLocal, inBase, blockAt, blockDistance, frameDistance, podDistance, crowding, judge, findHQ,
+  TOWER_X0, TOWER_X1, TOWER_LEFT_W, TOWER_RIGHT_W,
+  toLocal, inBase, inTower, blockAt, blockDistance, frameDistance, podDistance, crowding, judge, findHQ,
 };

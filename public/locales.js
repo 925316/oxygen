@@ -40,7 +40,8 @@
       bigVolcano: "大火山不足", iron: "铁火山不足", copper: "铜火山不足", gold: "金火山不足",
       metalCounts: "金属不足", metalTotal: "金属不足",
       water: "水不足", salt: "盐水不足", clean: "清水不足", cold: "低温水不足",
-      junk: "废喷孔超限", nearJunk: "基地旁废喷孔过多", blocked: "基地被挡", noHQ: "无打印仓",
+      junk: "废喷孔超限", nearJunk: "基地旁废喷孔过多", blocked: "基地被挡",
+      tower: "通天塔通道被挡", noHQ: "无打印仓",
     },
     en: {
       bigVolcano: "too few big volcanoes", iron: "not enough iron volcano",
@@ -49,7 +50,7 @@
       water: "not enough water", salt: "not enough salt water", clean: "not enough clean water",
       cold: "not enough cold water",
       junk: "too many junk vents", nearJunk: "too many junk vents near the base",
-      blocked: "base blocked", noHQ: "no printing pod",
+      blocked: "base blocked", tower: "tower shaft blocked", noHQ: "no printing pod",
     },
   };
 

@@ -19,6 +19,7 @@ const REASON_KEYS = {
   junk: "junk",
   nearJunk: "nearJunk",
   blocked: "blocked",
+  tower: "tower",
   noHQ: "noHQ",
 };
 
@@ -33,7 +34,7 @@ const TEXT = {
     filter: "筛选条件",
     noHits: "没有种子满足条件。下面的淘汰统计显示哪一条淘汰得最多，放宽它成本最低。",
     top: "前 {n} 名",
-    table: ["#", "种子", "分数", "总水", "清水", "低温水", "大火山", "金属", "废喷孔", "基地"],
+    table: ["#", "种子", "分数", "总水", "清水", "低温水", "大火山", "金属", "废喷孔", "通天塔", "基地"],
     more: "其余 {n} 个在 hits.json 里。",
     rejected: "淘汰统计",
     reason: "原因",
@@ -41,6 +42,9 @@ const TEXT = {
     rejectShare: "占比",
     baseBlocked: "report.baseBlocked",
     baseClear: "report.baseClear",
+    towerBlocked: "report.towerBlocked",
+    towerClear: "report.towerClear",
+    trimmed: "结果按分数截取前 {n} 条（原始命中 {hits}）。",
     note: "分数只用于本次结果内部的排序，不代表绝对好坏。",
   },
   en: {
@@ -53,7 +57,7 @@ const TEXT = {
     filter: "Filter",
     noHits: "No seeds matched. The rejection breakdown below shows which condition rejected the most seeds; relaxing that one is the cheapest change.",
     top: "Top {n} seeds",
-    table: ["#", "Seed", "Score", "Water", "Clean", "Cold", "Big volc.", "Metal", "Junk", "Base"],
+    table: ["#", "Seed", "Score", "Water", "Clean", "Cold", "Big volc.", "Metal", "Junk", "Tower", "Base"],
     more: "{n} more in the `hits.json` artifact.",
     rejected: "Rejection breakdown",
     reason: "Reason",
@@ -61,6 +65,9 @@ const TEXT = {
     rejectShare: "Share",
     baseBlocked: "report.baseBlocked",
     baseClear: "report.baseClear",
+    towerBlocked: "report.towerBlocked",
+    towerClear: "report.towerClear",
+    trimmed: "Trimmed to the top {n} by score ({hits} hits before trimming).",
     note: "Scores are relative ranking values within this run, not absolute quality.",
   },
 };
@@ -88,24 +95,27 @@ function readLang() {
   return flag ?? process.env.ONI_LANG ?? "zh";
 }
 
-const lang = cli.SUPPORTED.includes(readLang()) ? readLang() : "zh";const t = cli.makeT(lang);
-const words = TEXT[lang];
+const lang0 = cli.SUPPORTED.includes(readLang()) ? readLang() : "zh";
+const t = cli.makeT(lang0);
+let words = TEXT[lang0];
 
-function describeFilter(filter) {
+function describeFilter(filter, lang = lang0) {
+  const tw = cli.makeT(lang);
   const parts = [];
   for (const [key, value] of Object.entries(filter ?? {})) {
-    if (key === "requireClear") continue;
+    if (key === "requireClear" || key === "requireTower") continue;
     if (key === "maxJunk" || key === "maxNearJunk") {
-      if (value < 99) parts.push(t(`filter.${key}`, { n: value }));
+      if (value < 99) parts.push(tw(`filter.${key}`, { n: value }));
       continue;
     }
-    if (value > 0) parts.push(t(`filter.${key}`, { n: value }));
+    if (value > 0) parts.push(tw(`filter.${key}`, { n: value }));
   }
-  if (filter?.requireClear) parts.push(t("filter.requireClear"));
-  return parts.length ? parts.join(lang === "zh" ? "，" : ", ") : t("merge.noFilter");
+  if (filter?.requireClear) parts.push(tw("filter.requireClear"));
+  if (filter?.requireTower) parts.push(tw("filter.requireTower"));
+  return parts.length ? parts.join(lang === "zh" ? "，" : ", ") : tw("merge.noFilter");
 }
 
-function rejectText(reason) {
+function rejectText(reason, lang = lang0) {
   return locales.rejectName(REASON_KEYS[reason] ?? "noHQ", lang);
 }
 
@@ -113,60 +123,69 @@ function fill(template, vars) {
   return String(template).replace(/\{(\w+)\}/g, (m, name) => (vars[name] !== undefined ? String(vars[name]) : m));
 }
 
-function buildReport(data) {
+function buildReport(data, lang) {
+  const tw = cli.makeT(lang);
+  const w = TEXT[lang];
   const lines = [];
   const { range, scanned, hitCount, hitRate, filter, shards, threads, elapsedSeconds } = data;
 
-  lines.push(`## ${fill(words.title, { from: range.from, to: range.to - 1 })}`);
+  lines.push(`## ${fill(w.title, { from: range.from, to: range.to - 1 })}`);
   lines.push("");
   lines.push("| | |");
   lines.push("|---|---|");
-  lines.push(`| ${words.seeds} | ${scanned.toLocaleString()} |`);
-  lines.push(`| ${words.hits} | **${hitCount.toLocaleString()}** |`);
-  lines.push(`| ${words.rate} | ${(hitRate * 100).toFixed(3)}% |`);
-  lines.push(`| ${words.shards} | ${shards} / ${threads} |`);
-  lines.push(`| ${words.wall} | ${duration(elapsedSeconds ?? 0)} |`);  lines.push(`| ${words.filter} | ${describeFilter(filter)} |`);
+  lines.push(`| ${w.seeds} | ${scanned.toLocaleString()} |`);
+  lines.push(`| ${w.hits} | **${hitCount.toLocaleString()}** |`);
+  lines.push(`| ${w.rate} | ${(hitRate * 100).toFixed(3)}% |`);
+  lines.push(`| ${w.shards} | ${shards} / ${threads} |`);
+  lines.push(`| ${w.wall} | ${duration(elapsedSeconds ?? 0)} |`);
+  lines.push(`| ${w.filter} | ${describeFilter(filter, lang)} |`);
   lines.push("");
   if (data.partialShards?.length) {
-    lines.push(t("report.partial", { n: data.partialShards.length }));
+    lines.push(tw("report.partial", { n: data.partialShards.length }));
     lines.push("");
   }
 
   if (!hitCount) {
-    lines.push(words.noHits);
+    lines.push(w.noHits);
     lines.push("");
   } else {
-    lines.push(`### ${fill(words.top, { n: Math.min(TOP_ROWS, hitCount) })}`);
+    lines.push(`### ${fill(w.top, { n: Math.min(TOP_ROWS, hitCount) })}`);
     lines.push("");
-    lines.push(`| ${words.table.join(" | ")} |`);
-    lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
+    lines.push(`| ${w.table.join(" | ")} |`);
+    lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|");
     for (const [i, hit] of data.hits.slice(0, TOP_ROWS).entries()) {
-      const baseText = t(hit.blocked ? words.baseBlocked : words.baseClear);
+      const baseText = tw(hit.blocked ? w.baseBlocked : w.baseClear);
+      const towerText = tw(hit.towerBlocked ? w.towerBlocked : w.towerClear);
       lines.push(
         `| ${i + 1} | \`${hit.seed}\` | ${fmt(hit.score, 1)} | ${fmt(hit.water, 1)} | ` +
         `${fmt(hit.clean)} | ${fmt(hit.cold ?? 0)} | ${hit.bigVolcano} | ${fmt(hit.metal)} | ` +
-        `${hit.junkCount} | ${baseText} |`,
+        `${hit.junkCount} | ${towerText} | ${baseText} |`,
       );
     }
     lines.push("");
     if (hitCount > TOP_ROWS) {
-      lines.push(t("more", { n: hitCount - TOP_ROWS }));
+      lines.push(tw("more", { n: hitCount - TOP_ROWS }));
       lines.push("");
     }
   }
 
-  if (data.rejected?.length) {
-    lines.push(`### ${words.rejected}`);
+  if (data.topN && data.keptCount !== undefined && data.keptCount < hitCount) {
+    lines.push(fill(w.trimmed, { n: data.keptCount, hits: hitCount }));
     lines.push("");
-    lines.push(`| ${words.reason} | ${words.count} | ${words.rejectShare} |`);
+  }
+
+  if (data.rejected?.length) {
+    lines.push(`### ${w.rejected}`);
+    lines.push("");
+    lines.push(`| ${w.reason} | ${w.count} | ${w.rejectShare} |`);
     lines.push("|---|---:|---:|");
     for (const r of data.rejected.slice(0, 10)) {
-      lines.push(`| ${rejectText(r.reason)} | ${r.count.toLocaleString()} | ${r.pct}% |`);
+      lines.push(`| ${rejectText(r.reason, lang)} | ${r.count.toLocaleString()} | ${r.pct}% |`);
     }
     lines.push("");
   }
 
-  lines.push(words.note);
+  lines.push(w.note);
   lines.push("");
   return lines.join("\n");
 }
@@ -179,7 +198,7 @@ if (!fs.existsSync(input)) {
   process.exit(1);
 }
 
-const report = buildReport(JSON.parse(fs.readFileSync(input, "utf8")));
+const report = [buildReport(JSON.parse(fs.readFileSync(input, "utf8")), "en"), "---", "", buildReport(JSON.parse(fs.readFileSync(input, "utf8")), "zh")].join("\n");
 
 if (output) {
   fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
