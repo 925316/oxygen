@@ -89,11 +89,23 @@ function readFilter() {
     filter.requireClear = text === "true" || text === "1";
   }
 
+  const tower = readOption("require-tower", "CI_REQUIRE_TOWER");
+  if (tower !== undefined) {
+    const text = String(tower).toLowerCase();
+    if (!["true", "false", "1", "0"].includes(text)) {
+      throw new Error(`--require-tower must be true or false, got ${JSON.stringify(tower)}`);
+    }
+    filter.requireTower = text === "true" || text === "1";
+  }
+
   const normalized = scoring.normalizeFilter(filter);
   for (const [key, value] of Object.entries(normalized)) {
-    if (key === "requireClear") continue;
+    if (key === "requireClear" || key === "requireTower") continue;
     if (Number(value) < 0) throw new Error(`filter ${key} must be >= 0, got ${value}`);
   }
+  // `raw` is what gets written into the payload, so it has to carry the flags
+  // applied above rather than only what the file said.
+  raw = { ...raw, ...normalized };
   return { filter: normalized, raw };
 }
 
@@ -141,9 +153,11 @@ function readDeadline() {
   const budget = readOption("time-budget", "CI_TIME_BUDGET_MIN");
   if (budget !== undefined && budget !== "") {
     const minutes = Number(budget);
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-      throw new Error(`--time-budget must be a positive number of minutes, got ${JSON.stringify(budget)}`);
+    // Zero means "no limit", which is what an unused workflow input sends.
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      throw new Error(`--time-budget must be zero or a positive number of minutes, got ${JSON.stringify(budget)}`);
     }
+    if (minutes === 0) return null;
     return Date.now() + minutes * 60_000;
   }
   return null;
@@ -199,6 +213,46 @@ function runShard() {
     topN,
   });
 
+  // A shard that dies mid-run loses everything it wrote since the last save, so
+  // the same payload is rewritten on a timer as well as at the end. The file is
+  // replaced through a temp file so an upload never catches half a document.
+  const checkpointMs = Math.max(0, readNumber("checkpoint-seconds", "CI_CHECKPOINT_SEC", 600)) * 1000;
+
+  // `timeout` marks a deadline stop, which the merge accepts as partial.
+  // `final` marks the end of the run; a periodic checkpoint is neither, so it
+  // is written with finished=false and the merge refuses it unless the shard
+  // later completes.
+  function payloadFor({ timeout = false, final = false } = {}) {
+    const coveredTo = timeout ? Math.min(slice.to, slice.from + scan.done) : slice.to;
+    return {
+      index,
+      shards,
+      filter: raw,
+      weights,
+      range: timeout || !final ? { from: slice.from, to: coveredTo } : slice,
+      planned: slice,
+      scanned: scan.done,
+      elapsedSeconds: Math.round((Date.now() - started) / 100) / 10,
+      threads,
+      topN: topN || null,
+      hits: trimTop(scan.sortedHits(), topN),
+      rejected: scan.rejectionReport(),
+      finished: final,
+      stoppedBy: timeout ? "deadline" : null,
+      checkpoint: !final,
+    };
+  }
+
+  function save(opts) {
+    const payload = payloadFor(opts);
+    const temp = `${output}.tmp`;
+    writeJson(temp, payload);
+    fs.renameSync(temp, output);
+    return payload;
+  }
+
+  let lastCheckpoint = started;
+
   const tick = setInterval(() => {
     const p = scan.progress();
     const elapsed = (Date.now() - started) / 1000;
@@ -209,6 +263,10 @@ function runShard() {
     // Stopping keeps the seeds already scanned; `partial` tells the merge that
     // this shard does not cover its whole slice.
     else if (deadline !== null && Date.now() >= deadline) finish("deadline");
+    else if (checkpointMs > 0 && Date.now() - lastCheckpoint >= checkpointMs) {
+      lastCheckpoint = Date.now();
+      save({});
+    }
   }, 2000);
 
   let written = false;
@@ -220,27 +278,10 @@ function runShard() {
     if (reason) scan.stop();
 
     const timeout = reason === "deadline";
-    const coveredTo = timeout ? Math.min(slice.to, slice.from + scan.done) : slice.to;
-    const payload = {
-      index,
-      shards,
-      filter: raw,
-      weights,
-      range: timeout ? { from: slice.from, to: coveredTo } : slice,
-      planned: slice,
-      scanned: scan.done,
-      elapsedSeconds: Math.round((Date.now() - started) / 100) / 10,
-      threads,
-      topN: topN || null,
-      hits: trimTop(scan.sortedHits(), topN),
-      rejected: scan.rejectionReport(),
-      finished: !timeout,
-      stoppedBy: timeout ? "deadline" : null,
-    };
-    writeJson(output, payload);
+    const payload = save({ timeout, final: true });
     process.stdout.write("\n");
     console.log(t("shard.wrote", { hits: payload.hits.length, output }));
-    if (timeout) process.stdout.write(t("shard.stopped", { done: scan.done, from: slice.from, to: coveredTo }) + "\n");
+    if (timeout) process.stdout.write(t("shard.stopped", { done: scan.done, from: slice.from, to: payload.range.to }) + "\n");
     process.exit(0);
   }
   return null;
@@ -290,6 +331,18 @@ function runMerge() {
   const partial = payloads.filter((p) => p.stoppedBy === "deadline").map((p) => p.planned ?? p.range);
   const from = Math.min(...payloads.map((p) => p.range.from));
   const to = Math.max(...payloads.map((p) => (p.planned ?? p.range).to));
+  // `to` is the planned end, so a batch killed by its deadline ends earlier.
+  // Shards run in parallel over consecutive slices, so the seeds really covered
+  // are the longest unbroken run from `from`, not the largest shard end.
+  const coveredTo = (() => {
+    const ordered = [...payloads].sort((a, b) => a.range.from - b.range.from);
+    let reached = from;
+    for (const p of ordered) {
+      if (p.range.from > reached) break;
+      if (p.range.to > reached) reached = p.range.to;
+    }
+    return reached;
+  })();
   const shards = payloads[0].shards;
   checkCoverage(payloads, from, to, shards, partial);
 
@@ -313,6 +366,7 @@ function runMerge() {
 
   const summary = {
     range: { from, to },
+    coveredTo,
     seeds: to - from,
     scanned,
     partialShards: partial.length ? partial : undefined,

@@ -31,8 +31,14 @@
   };
 
   const BLOCK_NAMES = {
-    zh: { horizontal: "水平区域", pod: "打印仓旁", vertical: "垂直区域", gap: "打印仓上方", left: "左侧区域" },
-    en: { horizontal: "Horizontal zone", pod: "Beside pod", vertical: "Vertical zone", gap: "Above pod", left: "Left zone" },
+    zh: {
+      left: "左侧区域", tower: "通天塔通道", mid: "右侧条带（打印仓左）",
+      gap: "打印仓上方", pod: "打印仓", vertical: "右侧条带（打印仓右）",
+    },
+    en: {
+      left: "Left zone", tower: "Tower shaft", mid: "Right strip (left of pod)",
+      gap: "Above pod", pod: "Pod block", vertical: "Right strip (right of pod)",
+    },
   };
 
   const REJECT_NAMES = {

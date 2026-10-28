@@ -6,7 +6,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { exec } = require("node:child_process");
 
-const { BASE_W, BASE_H, BLOCKS } = require("./app/base-plan.cjs");
+const { BASE_W, BASE_H, BLOCKS, TOWER_X0, TOWER_X1 } = require("./app/base-plan.cjs");
 const seedgen = require("./app/seedgen.cjs");
 const analysis = require("./app/analysis.cjs");
 const detailView = require("./app/detail.cjs");
@@ -140,6 +140,8 @@ async function handleApi(req, res, url) {
       baseW: BASE_W,
       baseH: BASE_H,
       blocks: BLOCKS,
+      towerX0: TOWER_X0,
+      towerX1: TOWER_X1,
     });
   }
 

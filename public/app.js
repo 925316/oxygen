@@ -216,6 +216,14 @@ function drawBaseMap(detail) {
     });
   }
 
+  // The tower shaft spans the whole map, so on this frame it is a full-height
+  // strip that also extends past the top and bottom edges.
+  add("rect", {
+    x: config.towerX0, y: 0,
+    width: config.towerX1 - config.towerX0 + 1, height: config.baseH,
+    fill: "rgba(232,102,77,0.34)", stroke: "rgba(232,102,77,0.95)", "stroke-width": 0.4,
+  });
+
   // Pod 4x4.
   add("rect", {
     x: 32, y: 34, width: 4, height: 4,

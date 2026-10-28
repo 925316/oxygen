@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       from:
-        description: First seed (inclusive)
-        required: true
-        default: "0"
+        description: First seed (inclusive); empty or "auto" resumes after the last finished batch
+        required: false
+        default: "auto"
       count:
-        description: How many seeds to scan
-        required: true
-        default: "100000"
+        description: How many seeds to scan in this batch
+        required: false
+        default: "1500000"
       shards:
         description: Parallel shards (one runner job each)
         required: true
@@ -55,6 +55,26 @@ on:
         description: Require the 50x38 base layout to be free of geysers
         type: boolean
         default: true
+      require_tower:
+        description: Require the 3-wide tower shaft (local x 25..27) to be free of geysers
+        type: boolean
+        default: true
+      top_n:
+        description: Keep only the best N hits per shard, by score (0 keeps everything)
+        required: false
+        default: "5000"
+      checkpoint_seconds:
+        description: Rewrite the shard result this often, seconds (0 disables)
+        required: false
+        default: "600"
+      time_budget:
+        description: Stop scanning after this many minutes (0 runs to the end)
+        required: false
+        default: "320"
+      max_runs:
+        description: Stop the auto-queued chain after this many batches (0 never stops)
+        required: false
+        default: "0"
 
 concurrency:
   group: scan-${{ github.ref }}-${{ inputs.from }}-${{ inputs.count }}
@@ -71,9 +91,33 @@ jobs:
   plan:
     name: plan
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      from: ${{ steps.range.outputs.from }}
+      count: ${{ steps.range.outputs.count }}
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # "auto" means this batch continues where the last finished one stopped.
+      # The boundary is read from the progress asset rather than from a branch,
+      # so the workflow never has to commit state back to the repository.
+      - name: Resolve the batch range
+        id: range
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_TAG: scan-live
+          CI_ASSET: progress.json
+          REQUESTED_FROM: ${{ inputs.from }}
+          REQUESTED_COUNT: ${{ inputs.count }}
+        run: node scripts/ci-progress.cjs resolve >> "$GITHUB_OUTPUT"
+
       - name: Build shard matrix
         id: plan
         run: |
@@ -88,10 +132,14 @@ jobs:
     name: shard ${{ matrix.shard }}
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # The platform kills a job at 6 hours. Sitting at 350 leaves ten minutes of
+    # headroom so a slow checkpoint write cannot race the termination.
+    timeout-minutes: 350
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -108,18 +156,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: out/shard-${{ matrix.shard }}.json
-          key: scan-${{ hashFiles('app/**', 'scripts/ci-scan.cjs', 'config/default-filter.json') }}-f${{ inputs.from }}-n${{ inputs.count }}-s${{ inputs.shards }}-i${{ matrix.shard }}
+          key: scan-${{ hashFiles('app/**', 'scripts/ci-scan.cjs', 'config/default-filter.json') }}-f${{ needs.plan.outputs.from }}-n${{ needs.plan.outputs.count }}-s${{ inputs.shards }}-i${{ matrix.shard }}
 
       - name: Scan shard
         if: steps.shard-cache.outputs.cache-hit != 'true'
         env:
-          CI_FROM: ${{ inputs.from }}
-          CI_COUNT: ${{ inputs.count }}
+          CI_FROM: ${{ needs.plan.outputs.from }}
+          CI_COUNT: ${{ needs.plan.outputs.count }}
           CI_SHARDS: ${{ inputs.shards }}
           CI_INDEX: ${{ matrix.shard }}
           CI_THREADS: ${{ inputs.threads }}
           CI_OUTPUT: out/shard-${{ matrix.shard }}.json
           CI_FILTER_FILE: config/default-filter.json
+          CI_TOP_N: ${{ inputs.top_n }}
+          CI_CHECKPOINT_SEC: ${{ inputs.checkpoint_seconds }}
+          CI_TIME_BUDGET_MIN: ${{ inputs.time_budget }}
           CI_BIG_VOLCANO: ${{ inputs.big_volcano }}
           CI_IRON: ${{ inputs.iron }}
           CI_COPPER: ${{ inputs.copper }}
@@ -129,7 +180,20 @@ jobs:
           CI_MAX_JUNK: ${{ inputs.max_junk }}
           CI_MAX_NEAR_JUNK: ${{ inputs.max_near_junk }}
           CI_REQUIRE_CLEAR: ${{ inputs.require_clear }}
+          CI_REQUIRE_TOWER: ${{ inputs.require_tower }}
         run: node scripts/ci-scan.cjs shard
+
+      # Runs whatever happened to the scan, so a job that dies still publishes
+      # the last checkpoint the scanner wrote.
+      - name: Publish checkpoint
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_TAG: scan-live
+          CI_ASSET: shard-${{ matrix.shard }}.json
+          CI_FILE: out/shard-${{ matrix.shard }}.json
+        run: node scripts/ci-publish.cjs
 
       - name: Upload shard
         uses: actions/upload-artifact@v4
@@ -144,6 +208,9 @@ jobs:
     needs: [plan, scan]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -168,11 +235,36 @@ jobs:
         if: always()
         run: cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      # The hits of every batch are folded into one leaderboard on the release,
+      # so a later batch cannot push an earlier good seed out of the list.
+      - name: Publish hits
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_TAG: scan-live
+          CI_TOP_N: ${{ inputs.top_n }}
+        run: node scripts/ci-progress.cjs publish --input out/hits.json
+
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: scan-${{ inputs.from }}-${{ inputs.count }}
+          name: scan-${{ needs.plan.outputs.from }}-${{ needs.plan.outputs.count }}
           path: |
             out/hits.json
             out/summary.md
           retention-days: 30
+
+      # One run walks the whole seed space: after a batch succeeds it queues the
+      # next one from where this one stopped. `max_runs` bounds the chain so a
+      # mistake cannot burn runners forever.
+      - name: Queue the next batch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_TAG: scan-live
+          CI_WORKFLOW: scan.yml
+          MAX_RUNS: ${{ inputs.max_runs }}
+          BATCH: ${{ needs.plan.outputs.count }}
+        run: node scripts/ci-progress.cjs queue-next

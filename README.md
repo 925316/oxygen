@@ -64,29 +64,78 @@ responses; JSON field names stay the same.
 Coordinates are local to the base, origin at the **top-left corner**, X to the
 right, Y downward:
 
+The layout is three columns: 25 columns to the left of the shaft, the 3-wide
+shaft itself, and 22 columns to its right.
+
 ```
-+----------------------------------------+
-|                        |               |
-|                        |   vertical    |
-|                        |   X36~49      |
-|                        |   Y0~31       |
-+------------------------+---------------+
-|      horizontal        | pod | next-to |
-|     X0~31  Y32~37      |     |  X36~39 |
-+------------------------+---------------+
-    width 32               4      14
+     |         |         |         |         |
+     0         1         2         3         4
+     +--------------------------------------------------+
+  0  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  1  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  2  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  3  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  4  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  5  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  6  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  7  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  8  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  9  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 10  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 11  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 12  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 13  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 14  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 15  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 16  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 17  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 18  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 19  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 20  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 21  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 22  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 23  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 24  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 25  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 26  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 27  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 28  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 29  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 30  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 31  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 32  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 33  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 34  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 35  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 36  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 37  |.........................TTTrrrrpppppppprrrrrrrrrr|
+     +--------------------------------------------------+
+     |         |         |         |         |
+     0         1         2         3         4
 ```
 
-| Zone | X range | Y range |
-|---|---|---|
-| horizontal | 0 ~ 31 | 32 ~ 37 |
-| pod | 32 ~ 35 | 34 ~ 37 |
-| next to pod | 36 ~ 39 | 32 ~ 37 |
-| vertical | 36 ~ 49 | 0 ~ 31 |
-| above pod | 32 ~ 35 | 32 ~ 33 |
+'.' left X0~24   'T' tower X25~27   'm' right X28~49 above the pod
+'p' pod block X32~39 (y32~37)   'r' right strip X40~49
 
-Any geyser landing in one of these blocks marks the seed `blocked`, and it is
-filtered out when base clearance is required.
+The shaft column is `T` on every one of the 38 rows, and it keeps going above
+and below the frame: the frame only covers that column where the base happens
+to sit.
+
+| Zone | X range | Y range | Width | Notes |
+|---|---|---|---|---|
+| left | 0 ~ 24 | 0 ~ 37 | 25 | left of the shaft |
+| tower | 25 ~ 27 | whole map | 3 | 3-wide shaft, checked against every geyser |
+| right, above pod | 28 ~ 49 | 0 ~ 31 | 22 | everything right of the shaft, above the pod |
+| right, pod row | 28 ~ 31 | 32 ~ 37 | 4 | strip left of the pod |
+| right, pod row | 32 ~ 39 | 32 ~ 37 | 8 | printing pod and its reserved block |
+| right, pod row | 40 ~ 49 | 32 ~ 37 | 10 | strip right of the pod |
+
+Any geyser landing in one of the 50x38 blocks marks the seed `blocked`, and it
+is filtered out when base clearance is required.
+
+The tower shaft is a separate gate: its Y range is the whole map, not the 38-row
+frame, so a geyser anywhere in x 25..27 blocks the shaft even far above or
+below the base.
 
 The printing pod is placed differently for every seed, so every check is
 relative to that seed's own pod rather than to a hard-coded coordinate.
@@ -321,28 +370,74 @@ npm install
 
 坐标系以基地**左上角**为原点，X 向右，Y 向下：
 
+布局是三段：通道左边 25 列，通道本身 3 列，通道右边 22 列。
+
 ```
-+----------------------------------------+
-|                        |               |
-|                        |  垂直区域     |
-|                        |   X36~49      |
-|                        |   Y0~31       |
-+------------------------+---------------+
-|     水平区域           | 仓 |  打印仓旁 |
-|     X0~31  Y32~37      |    |  X36~39   |
-+------------------------+---------------+
-   宽度 32                 4      14
+     |         |         |         |         |
+     0         1         2         3         4
+     +--------------------------------------------------+
+  0  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  1  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  2  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  3  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  4  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  5  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  6  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  7  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  8  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+  9  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 10  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 11  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 12  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 13  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 14  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 15  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 16  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 17  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 18  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 19  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 20  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 21  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 22  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 23  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 24  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 25  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 26  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 27  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 28  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 29  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 30  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 31  |.........................TTTmmmmmmmmmmmmmmmmmmmmmm|
+ 32  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 33  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 34  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 35  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 36  |.........................TTTrrrrpppppppprrrrrrrrrr|
+ 37  |.........................TTTrrrrpppppppprrrrrrrrrr|
+     +--------------------------------------------------+
+     |         |         |         |         |
+     0         1         2         3         4
 ```
 
-| 区域 | X 范围 | Y 范围 |
-|---|---|---|
-| 水平区域 | 0 ~ 31 | 32 ~ 37 |
-| 打印仓 | 32 ~ 35 | 34 ~ 37 |
-| 打印仓旁 | 36 ~ 39 | 32 ~ 37 |
-| 垂直区域 | 36 ~ 49 | 0 ~ 31 |
-| 打印仓上方 | 32 ~ 35 | 32 ~ 33 |
+`.` 左侧 X0~24, `T` 通天塔 X25~27, `m` 右侧 X28~49（通道上方）
+`p` 打印仓块 X32~39（y32~37）, `r` 右侧条带 X40~49
 
-只要有泉水落进上面任一块，该种子就被判为 `blocked`，在要求「基地净空」时会被筛掉。
+通道这一列在 38 行里每一行都是 `T`，而且它在框的上方和下方继续延伸：基地框只覆盖
+通道所在的那一段。
+
+| 区域 | X 范围 | Y 范围 | 宽度 | 说明 |
+|---|---|---|---|---|
+| 左侧区域 | 0 ~ 24 | 0 ~ 37 | 25 | 通道左边 |
+| 通天塔通道 | 25 ~ 27 | 整张地图 | 3 | 3 格宽竖井，对所有泉判定 |
+| 右侧（打印仓上方） | 28 ~ 49 | 0 ~ 31 | 22 | 通道右边的全部区域 |
+| 右侧（打印仓行左条） | 28 ~ 31 | 32 ~ 37 | 4 | 打印仓左边的条带 |
+| 右侧（打印仓块） | 32 ~ 39 | 32 ~ 37 | 8 | 打印仓及其预留区 |
+| 右侧（打印仓行右条） | 40 ~ 49 | 32 ~ 37 | 10 | 打印仓右边的条带 |
+
+只要有泉水落进 50×38 框内任一块，该种子就被判为 `blocked`，在要求「基地净空」时会被筛掉。
+
+通天塔通道是单独的一条判定：它的 Y 范围是整张地图，不是 38 行框内，所以哪怕泉在
+基地上方的远处，只要 X 落在 25 ~ 27，同样算挡住了通道。
 
 打印仓在世界里的位置每个种子都不同，所以所有判定都是相对每个种子自己的打印仓
 换算出来，不是写死坐标。

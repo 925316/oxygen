@@ -42,14 +42,8 @@ const BLOCKS = [
   { name: "vertical", x0: 40, x1: 49, y0: 0, y1: 37 },
 ];
 
-const BLOCK_LABEL = {
-  pod: "打印仓旁",
-  vertical: "垂直区域",
-  gap: "打印仓上方",
-  left: "左侧区域",
-  tower: "通天塔通道",
-  mid: "通道右侧区域",
-};
+// Labels live in public/locales.js so the server, CLI and web app share one
+// copy; this module only reports block names.
 
 // How close a geyser crowds a build plan, as a 0-100 cost. Only geysers inside
 // the frame or a few cells outside its edge earn a non-zero value: further out
@@ -159,7 +153,7 @@ function findHQ(buildings) {
 }
 
 module.exports = {
-  BASE_W, BASE_H, POD_LOCAL_X, POD_LOCAL_Y_BOTTOM, BLOCKS, BLOCK_LABEL, CROWD_RADIUS,
+  BASE_W, BASE_H, POD_LOCAL_X, POD_LOCAL_Y_BOTTOM, BLOCKS, CROWD_RADIUS,
   TOWER_X0, TOWER_X1, TOWER_LEFT_W, TOWER_RIGHT_W,
   toLocal, inBase, inTower, blockAt, blockDistance, frameDistance, podDistance, crowding, judge, findHQ,
 };
